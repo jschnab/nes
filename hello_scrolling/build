@@ -1,0 +1,4 @@
+ca65 reset.asm
+ca65 backgrounds.asm
+ca65 scrolling.asm
+ld65 reset.o backgrounds.o scrolling.o -C ../nes.cfg -o scrolling.nes
