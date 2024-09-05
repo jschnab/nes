@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+ca65 reset.s
+ca65 main.s
+
+ld65 reset.o main.o -C ../nes.cfg -o game.nes
