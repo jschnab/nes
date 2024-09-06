@@ -30,9 +30,12 @@ clear_oam:
     LDA #$40
     STA apple_y
     LDA #$80
-    STA snake_x
+    STA HEAD_X
     LDA #$88
-    STA snake_y
+    STA BODY_X
+    LDA #$88
+    STA HEAD_Y
+    STA BODY_Y
     LDA #LEFT
     STA snake_dir
     LDA #$04  ; 4 bytes = 2 segments

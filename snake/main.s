@@ -14,11 +14,8 @@
     LDA #$02
     STA OAMDMA
 
-    ; update game state *after* DMA transfer
-    JSR read_controller1
-    JSR update_direction
-    JSR update_snake_position
-    JSR draw_sprites
+    LDA #0
+    STA sleeping
 
     LDA #$00
     STA $2005
@@ -35,31 +32,68 @@
     TYA
     PHA
 
-    ; write apple tile number and attributes
-    LDA #$02
+    ; write apple data
+    LDA apple_y
+    STA $0200
+    LDA #$02  ; use sprite 2
     STA $0201
     LDA #$01  ; use palette 1
     STA $0202
-
-    ; write snake tile number and attributes
-    LDA #$02
-    STA $0205
-    LDA #$02 ; use palette 2
-    STA $0206
-
-    ; write apple location
-    LDA apple_y
-    STA $0200
     LDA apple_x
     STA $0203
 
-    ; write snake location
-    LDA snake_y
-    STA $0204
-    LDA snake_x
-    STA $0207
+    LDA #0
+    STA snake_index
+draw_snake_loop:
+    JSR draw_snake_segment
+    INC snake_index  ; increment twice because snake index = memory index
+    INC snake_index
+    LDA snake_index
+    CMP snake_length
+    BNE draw_snake_loop
 
 exit_subroutine:
+    PLA
+    TAY
+    PLA
+    TAX
+    PLA
+    PLP
+    RTS
+.endproc
+
+.proc draw_snake_segment
+    PHP
+    PHA
+    TXA
+    PHA
+    TYA
+    PHA
+
+    ; write snake tile number and attributes
+    LDA #$04  ; OAM memory offset
+    LDX snake_index
+    BEQ oam_address_found
+
+find_address:
+    CLC
+    ADC #$04
+    DEX
+    BNE find_address
+
+oam_address_found:
+    TAY  ; use Y to hold OAM address offset
+    LDX snake_index
+
+    LDA HEAD_Y, X
+    STA $0200, Y
+    LDA #$02
+    STA $0201, Y
+    LDA #$02
+    STA $0202, Y
+    LDA HEAD_X, X
+    STA $0203, Y
+
     PLA
     TAY
     PLA
@@ -127,40 +161,66 @@ done_updating_direction:
     TYA
     PHA
 
+    LDA timer
+    BEQ do_update
+    DEC timer
+    JMP done_updating_snake_position
+
+do_update:
+    LDA #$10  ; this value controls game speed
+    STA timer
+    LDX snake_length
+    DEX
+update_loop:
+    LDA HEAD_X,X
+    STA BODY_X,X
+    DEX
+    BPL update_loop
+
     LDA #UP
     BIT snake_dir
     BEQ check_down
-    LDA snake_y
+    LDA HEAD_Y
     CMP #$08
     BCC done_updating_snake_position
-    DEC snake_y
+    LDA HEAD_Y
+    SBC #$08
+    STA HEAD_Y
 
 check_down:
     LDA #DOWN
     BIT snake_dir
     BEQ check_left
-    LDA snake_y
+    LDA HEAD_Y
     CMP #$df
     BCS done_updating_snake_position
-    INC snake_y
+    LDA HEAD_Y
+    CLC
+    ADC #$08
+    STA HEAD_Y
 
 check_left:
     LDA #LEFT
     BIT snake_dir
     BEQ check_right
-    LDA snake_x
+    LDA HEAD_X
     CMP #$09
     BCC done_updating_snake_position
-    DEC snake_x
+    LDA HEAD_X
+    SBC #$08
+    STA HEAD_X
 
 check_right:
     LDA #RIGHT
     BIT snake_dir
     BEQ done_updating_snake_position
-    LDA snake_x
+    LDA HEAD_X
     CMP #$f0
     BCS done_updating_snake_position
-    INC snake_x
+    LDA HEAD_X
+    CLC
+    ADC #$08
+    STA HEAD_X
 
 done_updating_snake_position:
     PLA
@@ -307,8 +367,19 @@ vblankwait: ; wait for another vblank before continuing
     STA PPUCTRL
     LDA #%00011110 ; turn on screen
     STA PPUMASK
-forever:
-    JMP forever
+
+mainloop:
+    JSR read_controller1
+    JSR update_direction
+    JSR update_snake_position
+    JSR draw_sprites
+
+    INC sleeping
+sleep:
+    LDA sleeping
+    BNE sleep
+
+    JMP mainloop
 .endproc
 
 .segment "RODATA"
@@ -330,7 +401,10 @@ snake_x: .res 1
 snake_y: .res 1
 snake_dir: .res 1
 snake_length: .res 1
+snake_index: .res 1
 pad1: .res 1
+sleeping: .res 1
+timer: .res 1
 .exportzp apple_x, apple_y, snake_x, snake_y, snake_dir, snake_length, pad1
 
 .segment "VECTORS"
