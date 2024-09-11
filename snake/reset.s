@@ -27,18 +27,23 @@ clear_oam:
     ; initialize zero-page values
     LDA #$a0
     STA apple_x
+    STA SEED
     LDA #$40
     STA apple_y
+    STA SEED
+
     LDA #$80
-    STA HEAD_X
+    STA snake_x
     LDA #$88
-    STA BODY_X
+    LDX #$01
+    STA snake_x, X
     LDA #$88
-    STA HEAD_Y
-    STA BODY_Y
+    STA snake_y
+    STA snake_y, X
+
     LDA #LEFT
     STA snake_dir
-    LDA #$04  ; 4 bytes = 2 segments
+    LDA #$02
     STA snake_length
 
     JMP main

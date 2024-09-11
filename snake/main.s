@@ -46,13 +46,44 @@
     STA snake_index
 draw_snake_loop:
     JSR draw_snake_segment
-    INC snake_index  ; increment twice because snake index = memory index
     INC snake_index
     LDA snake_index
     CMP snake_length
     BNE draw_snake_loop
 
 exit_subroutine:
+    PLA
+    TAY
+    PLA
+    TAX
+    PLA
+    PLP
+    RTS
+.endproc
+
+.proc update_game_state
+    PHP
+    PHA
+    TXA
+    PHA
+    TYA
+    PHA
+
+    ; update snake only if timer is zero
+    LDA timer
+    BEQ do_update
+    DEC timer
+    JMP done_updating_state
+
+do_update:
+    ; reset timer
+    LDA #TIMER_DURATION  ; this value controls game speed
+    STA timer
+
+    JSR check_collision
+    JSR update_snake_position
+
+done_updating_state:
     PLA
     TAY
     PLA
@@ -85,13 +116,13 @@ oam_address_found:
     TAY  ; use Y to hold OAM address offset
     LDX snake_index
 
-    LDA HEAD_Y, X
+    LDA snake_y, X
     STA $0200, Y
     LDA #$02
     STA $0201, Y
     LDA #$02
     STA $0202, Y
-    LDA HEAD_X, X
+    LDA snake_x, X
     STA $0203, Y
 
     PLA
@@ -161,66 +192,68 @@ done_updating_direction:
     TYA
     PHA
 
-    LDA timer
-    BEQ do_update
-    DEC timer
-    JMP done_updating_snake_position
-
-do_update:
-    LDA #$10  ; this value controls game speed
-    STA timer
+    ; shift x and y coordinates down the snake
+    ; Y register stores source index
+    ; X register stores destination index
+    LDY snake_length
+    DEY
+    DEY
     LDX snake_length
     DEX
 update_loop:
-    LDA HEAD_X,X
-    STA BODY_X,X
+    LDA snake_x, Y
+    STA snake_x, X
+    LDA snake_y, Y
+    STA snake_y, X
     DEX
+    DEY
     BPL update_loop
 
     LDA #UP
     BIT snake_dir
     BEQ check_down
-    LDA HEAD_Y
-    CMP #$08
+    LDA snake_y
+    CMP #$09
     BCC done_updating_snake_position
-    LDA HEAD_Y
+    LDA snake_y
+    SEC
     SBC #$08
-    STA HEAD_Y
+    STA snake_y
 
 check_down:
     LDA #DOWN
     BIT snake_dir
     BEQ check_left
-    LDA HEAD_Y
+    LDA snake_y
     CMP #$df
     BCS done_updating_snake_position
-    LDA HEAD_Y
+    LDA snake_y
     CLC
     ADC #$08
-    STA HEAD_Y
+    STA snake_y
 
 check_left:
     LDA #LEFT
     BIT snake_dir
     BEQ check_right
-    LDA HEAD_X
+    LDA snake_x
     CMP #$09
     BCC done_updating_snake_position
-    LDA HEAD_X
+    LDA snake_x
     SBC #$08
-    STA HEAD_X
+    STA snake_x
 
 check_right:
     LDA #RIGHT
     BIT snake_dir
     BEQ done_updating_snake_position
-    LDA HEAD_X
+    LDA snake_x
     CMP #$f0
     BCS done_updating_snake_position
-    LDA HEAD_X
+    LDA snake_x
     CLC
     ADC #$08
-    STA HEAD_X
+    STA snake_x
 
 done_updating_snake_position:
     PLA
@@ -229,6 +262,62 @@ done_updating_snake_position:
     TAX
     PLA
     PLP
+    RTS
+.endproc
+
+.proc check_collision
+    PHP
+    PHA
+    TXA
+    PHA
+    TYA
+    PHA
+
+    LDA snake_x
+    CMP apple_x
+    BNE done_checking_collision
+    LDA snake_y
+    CMP apple_y
+    BNE done_checking_collision
+    JSR spawn_apple
+    LDA #MAX_SNAKE_SIZE
+    CMP snake_length
+    BEQ done_checking_collision
+    INC snake_length
+
+done_checking_collision:
+    PLA
+    TAY
+    PLA
+    TAX
+    PLA
+    PLP
+    RTS
+.endproc
+
+.import random_x
+.import random_y
+
+.proc spawn_apple
+    LDA SEED
+    JSR random_x
+    LSR
+    LSR
+    LSR
+    ASL
+    ASL
+    ASL
+    STA apple_x
+
+    LDA SEED
+    JSR random_y
+    LSR
+    LSR
+    LSR
+    ASL
+    ASL
+    ASL
+    STA apple_y
     RTS
 .endproc
 
@@ -371,7 +460,7 @@ vblankwait: ; wait for another vblank before continuing
 mainloop:
     JSR read_controller1
     JSR update_direction
-    JSR update_snake_position
+    JSR update_game_state
     JSR draw_sprites
 
     INC sleeping
@@ -397,8 +486,8 @@ palettes:
 .segment "ZEROPAGE"
 apple_x: .res 1
 apple_y: .res 1
-snake_x: .res 1
-snake_y: .res 1
+snake_x: .res MAX_SNAKE_SIZE
+snake_y: .res MAX_SNAKE_SIZE
 snake_dir: .res 1
 snake_length: .res 1
 snake_index: .res 1

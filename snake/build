@@ -3,5 +3,6 @@
 ca65 reset.s
 ca65 main.s
 ca65 controller.s
+ca65 random.s
 
-ld65 reset.o controller.o main.o -C ../nes.cfg -o snake.nes
+ld65 reset.o controller.o random.o main.o -C ../nes.cfg -o snake.nes
