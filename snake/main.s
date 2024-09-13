@@ -9,6 +9,13 @@
 .import read_controller1
 
 .proc nmi_handler
+    PHP
+    PHA
+    TXA
+    PHA
+    TYA
+    PHA
+
     LDA #$00
     STA OAMADDR
     LDA #$02
@@ -20,44 +27,70 @@
     LDA #$00
     STA $2005
     STA $2005
-    RTI
-.endproc
 
-.proc draw_sprites
-    ; save registers
-    PHP
-    PHA
-    TXA
-    PHA
-    TYA
-    PHA
-
-    ; write apple data
-    LDA apple_y
-    STA $0200
-    LDA #$02  ; use sprite 2
-    STA $0201
-    LDA #$01  ; use palette 1
-    STA $0202
-    LDA apple_x
-    STA $0203
-
-    LDA #0
-    STA snake_index
-draw_snake_loop:
-    JSR draw_snake_segment
-    INC snake_index
-    LDA snake_index
-    CMP snake_length
-    BNE draw_snake_loop
-
-exit_subroutine:
     PLA
     TAY
     PLA
     TAX
     PLA
     PLP
+    RTI
+.endproc
+
+.proc draw_snake
+    ; draw head
+    LDA PPUSTATUS
+    LDA HEAD_HIGH
+    STA PPUADDR
+    LDA HEAD_LOW
+    STA PPUADDR
+    LDA #$03
+    STA PPUDATA
+
+    ; erase tail
+    LDA PPUSTATUS
+    LDX snake_length
+    LDA HEAD_HIGH,X
+    STA PPUADDR
+    LDA HEAD_LOW,X
+    STA PPUADDR
+    LDA #$ff
+    STA PPUDATA
+
+    LDA #$00
+    STA PPUSCROLL
+    STA PPUSCROLL
+
+    RTS
+.endproc
+
+.proc spawn_apple
+    LDA apple_high
+    JSR random_high
+    CLC
+    ADC #$20
+    STA apple_high
+    LDA apple_low
+    JSR random_low
+    STA apple_low
+
+    RTS
+.endproc
+
+.proc draw_apple
+    ; write apple data
+    LDA PPUSTATUS
+    LDA apple_high
+    STA PPUADDR
+    LDA apple_low
+    STA PPUADDR
+    LDA #$01
+    STA PPUDATA
+
+    LDA #$00
+    STA PPUSCROLL
+    STA PPUSCROLL
+
     RTS
 .endproc
 
@@ -80,51 +113,11 @@ do_update:
     LDA #TIMER_DURATION  ; this value controls game speed
     STA timer
 
-    JSR check_collision
     JSR update_snake_position
+    JSR check_apple_collision
+    JSR check_wall_collision
 
 done_updating_state:
-    PLA
-    TAY
-    PLA
-    TAX
-    PLA
-    PLP
-    RTS
-.endproc
-
-.proc draw_snake_segment
-    PHP
-    PHA
-    TXA
-    PHA
-    TYA
-    PHA
-
-    ; write snake tile number and attributes
-    LDA #$04  ; OAM memory offset
-    LDX snake_index
-    BEQ oam_address_found
-
-find_address:
-    CLC
-    ADC #$04
-    DEX
-    BNE find_address
-
-oam_address_found:
-    TAY  ; use Y to hold OAM address offset
-    LDX snake_index
-
-    LDA snake_y, X
-    STA $0200, Y
-    LDA #$02
-    STA $0201, Y
-    LDA #$02
-    STA $0202, Y
-    LDA snake_x, X
-    STA $0203, Y
-
     PLA
     TAY
     PLA
@@ -193,67 +186,53 @@ done_updating_direction:
     PHA
 
     ; shift x and y coordinates down the snake
-    ; Y register stores source index
-    ; X register stores destination index
-    LDY snake_length
-    DEY
-    DEY
     LDX snake_length
     DEX
-update_loop:
-    LDA snake_x, Y
-    STA snake_x, X
-    LDA snake_y, Y
-    STA snake_y, X
+update_snake_position_loop:
+    LDA HEAD_LOW,X
+    STA BODY_START,X
     DEX
-    DEY
-    BPL update_loop
+    BPL update_snake_position_loop
 
-    LDA #UP
-    BIT snake_dir
-    BEQ check_down
-    LDA snake_y
-    CMP #$09
-    BCC done_updating_snake_position
-    LDA snake_y
+    ; update head position
+    LDA snake_dir
+    LSR
+    BCS up
+    LSR
+    BCS down
+    LSR
+    BCS left
+    LSR
+    BCS right
+
+up:
     SEC
-    SBC #$08
-    STA snake_y
+    LDA HEAD_LOW
+    SBC #$20
+    STA HEAD_LOW
+    BCC up_high_byte
+    JMP done_updating_snake_position
+up_high_byte:
+    DEC HEAD_HIGH
+    JMP done_updating_snake_position
 
-check_down:
-    LDA #DOWN
-    BIT snake_dir
-    BEQ check_left
-    LDA snake_y
-    CMP #$df
-    BCS done_updating_snake_position
-    LDA snake_y
+down:
     CLC
-    ADC #$08
-    STA snake_y
+    LDA HEAD_LOW
+    ADC #$20
+    STA HEAD_LOW
+    BCS down_high_byte
+    JMP done_updating_snake_position
+down_high_byte:
+    INC HEAD_HIGH
+    JMP done_updating_snake_position
 
-check_left:
-    LDA #LEFT
-    BIT snake_dir
-    BEQ check_right
-    LDA snake_x
-    CMP #$09
-    BCC done_updating_snake_position
-    LDA snake_x
-    SBC #$08
-    STA snake_x
+left:
+    DEC HEAD_LOW
+    JMP done_updating_snake_position
 
-check_right:
-    LDA #RIGHT
-    BIT snake_dir
-    BEQ done_updating_snake_position
-    LDA snake_x
-    CMP #$f0
-    BCS done_updating_snake_position
-    LDA snake_x
-    CLC
-    ADC #$08
-    STA snake_x
+right:
+    INC HEAD_LOW
 
 done_updating_snake_position:
     PLA
@@ -265,62 +244,64 @@ done_updating_snake_position:
     RTS
 .endproc
 
-.proc check_collision
-    PHP
-    PHA
-    TXA
-    PHA
-    TYA
-    PHA
-
-    LDA snake_x
-    CMP apple_x
-    BNE done_checking_collision
-    LDA snake_y
-    CMP apple_y
-    BNE done_checking_collision
-    JSR spawn_apple
-    LDA #MAX_SNAKE_SIZE
-    CMP snake_length
-    BEQ done_checking_collision
+.proc check_apple_collision
+    LDA apple_low
+    CMP HEAD_LOW
+    BNE done_check_apple_collision
+    LDA apple_high
+    CMP HEAD_HIGH
+    BNE done_check_apple_collision
     INC snake_length
+    INC snake_length
+    JSR spawn_apple
 
-done_checking_collision:
-    PLA
-    TAY
-    PLA
-    TAX
-    PLA
-    PLP
+done_check_apple_collision:
     RTS
 .endproc
 
-.import random_x
-.import random_y
+.proc check_wall_collision
+    ; top wall, check if going up wraps around screen
+    LDA HEAD_HIGH
+    CMP #$20
+    BNE check_collision_left_wall
+    LDA HEAD_LOW
+    SEC
+    SBC #$20
+    BCC did_collide
 
-.proc spawn_apple
-    LDA SEED
-    JSR random_x
-    LSR
-    LSR
-    LSR
-    ASL
-    ASL
-    ASL
-    STA apple_x
+check_collision_left_wall:
+    ; left wall, check if going left wraps around screen
+    LDA HEAD_LOW
+    SEC
+    SBC #$01
+    AND #$1f
+    CMP #$1f
+    BEQ did_collide
 
-    LDA SEED
-    JSR random_y
-    LSR
-    LSR
-    LSR
-    ASL
-    ASL
-    ASL
-    STA apple_y
+    ; right wall
+    LDA HEAD_LOW
+    AND #$1f
+    CMP #$1f
+    BEQ did_collide
+
+    ; bottom wall
+    ; check if going down 1 line of nametable goes above #$23bf
+    LDA HEAD_HIGH
+    CMP #$23
+    BNE done_check_wall_collision
+    LDA HEAD_LOW
+    CMP #$a0
+    BCS did_collide
+
+done_check_wall_collision:
     RTS
+
+did_collide:
+    JMP gameover
 .endproc
 
+.import random_low
+.import random_high
 .import reset_handler
 
 .export main
@@ -337,6 +318,23 @@ load_palettes:
     INX
     CPX #$20
     BNE load_palettes
+
+    ; draw snake initial position
+    LDX #$03
+    ; head
+    LDA PPUSTATUS
+    LDA HEAD_HIGH
+    STA PPUADDR
+    LDA HEAD_LOW
+    STA PPUADDR
+    STX PPUDATA
+    ; body
+    LDA PPUSTATUS
+    LDA BODY_START+1
+    STA PPUADDR
+    LDA BODY_START
+    STA PPUADDR
+    STX PPUDATA
 
     ; write nametable
     LDY #$00
@@ -461,7 +459,8 @@ mainloop:
     JSR read_controller1
     JSR update_direction
     JSR update_game_state
-    JSR draw_sprites
+    JSR draw_apple
+    JSR draw_snake
 
     INC sleeping
 sleep:
@@ -471,9 +470,90 @@ sleep:
     JMP mainloop
 .endproc
 
+.proc gameover
+    ; G
+    LDA PPUSTATUS
+    LDA #$21
+    STA PPUADDR
+    LDA #$cb
+    STA PPUADDR
+    LDA #$0a
+    STA PPUDATA
+
+    ; A
+    LDA PPUSTATUS
+    LDA #$21
+    STA PPUADDR
+    LDA #$cc
+    STA PPUADDR
+    LDA #$04
+    STA PPUDATA
+
+    ; M
+    LDA PPUSTATUS
+    LDA #$21
+    STA PPUADDR
+    LDA #$cd
+    STA PPUADDR
+    LDA #$10
+    STA PPUDATA
+
+    ; E
+    LDA PPUSTATUS
+    LDA #$21
+    STA PPUADDR
+    LDA #$ce
+    STA PPUADDR
+    LDA #$08
+    STA PPUDATA
+
+    ; O
+    LDA PPUSTATUS
+    LDA #$21
+    STA PPUADDR
+    LDA #$d0
+    STA PPUADDR
+    LDA #$12
+    STA PPUDATA
+
+    ; V
+    LDA PPUSTATUS
+    LDA #$21
+    STA PPUADDR
+    LDA #$d1
+    STA PPUADDR
+    LDA #$19
+    STA PPUDATA
+
+    ; E
+    LDA PPUSTATUS
+    LDA #$21
+    STA PPUADDR
+    LDA #$d2
+    STA PPUADDR
+    LDA #$08
+    STA PPUDATA
+
+    ; R
+    LDA PPUSTATUS
+    LDA #$21
+    STA PPUADDR
+    LDA #$d3
+    STA PPUADDR
+    LDA #$15
+    STA PPUDATA
+
+    LDA #$00
+    STA PPUSCROLL
+    STA PPUSCROLL
+
+gameover_loop:
+    JMP gameover_loop
+.endproc
+
 .segment "RODATA"
 palettes:
-.byte $0f, $00, $10, $30  ; greys
+.byte $0f, $16, $10, $19  ; black, red, light grey, green
 .byte $0f, $06, $16, $26  ; reds
 .byte $0f, $09, $19, $29  ; greens
 .byte $0f, $01, $21, $31  ; blues
@@ -484,17 +564,15 @@ palettes:
 .byte $0f, $01, $21, $31  ; blues
 
 .segment "ZEROPAGE"
-apple_x: .res 1
-apple_y: .res 1
-snake_x: .res MAX_SNAKE_SIZE
-snake_y: .res MAX_SNAKE_SIZE
+apple_low: .res 1
+apple_high: .res 1
 snake_dir: .res 1
 snake_length: .res 1
-snake_index: .res 1
 pad1: .res 1
 sleeping: .res 1
 timer: .res 1
-.exportzp apple_x, apple_y, snake_x, snake_y, snake_dir, snake_length, pad1
+seed: .res 2
+.exportzp apple_low, apple_high, snake_dir, snake_length, pad1, seed
 
 .segment "VECTORS"
 .addr nmi_handler, reset_handler, irq_handler

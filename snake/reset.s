@@ -25,29 +25,31 @@ clear_oam:
     BNE clear_oam
 
     ; initialize zero-page values
-    LDA #$a0
-    STA apple_x
-    STA SEED
-    LDA #$40
-    STA apple_y
-    STA SEED
+    LDA #$21
+    STA apple_high
+    STA seed
+    LDA #$b7
+    STA apple_low
+    STA seed+1
 
-    LDA #$80
-    STA snake_x
-    LDA #$88
-    LDX #$01
-    STA snake_x, X
-    LDA #$88
-    STA snake_y
-    STA snake_y, X
+    LDA #$20
+    STA HEAD_HIGH
+    STA BODY_START+1
+    STA BODY_START+3
+    LDA #$ee
+    STA HEAD_LOW
+    LDA #$ef
+    STA BODY_START
+    LDA #$f0
+    STA BODY_START+2
 
     LDA #LEFT
     STA snake_dir
-    LDA #$02
+    LDA #$04 ; 2 segments = 4 memory addresses
     STA snake_length
 
     JMP main
 .endproc
 
 .segment "ZEROPAGE"
-.importzp apple_x, apple_y, snake_x, snake_y, snake_dir, snake_length
+.importzp apple_low, apple_high, snake_dir, snake_length, seed

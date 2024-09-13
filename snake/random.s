@@ -1,71 +1,46 @@
 .include "constants.inc"
 
-.export random_x
-.export random_y
+.export random_high
+.export random_low
 
 
 .proc galois16
-    LDA SEED
+    LDA seed
     LDY #8
 
 :
     ASL
-    ROL SEED+1
+    ROL seed+1
     BCC :+
     EOR #$39
 
 :
     DEY
     BNE :--
-    STA SEED
+    STA seed
     CMP #0
     RTS
 .endproc
 
 
-; generates a random number between 8 and 232
-; to be used for a random x-coordinate
-.proc random_x
-loop_random_x:
+; generates a random number between 0 and 255
+; to be used for the apple low byte
+.proc random_low
+loop_random_lo:
     JSR galois16
-    CMP #$e8  ; we will add 8
-    BPL loop_random_x
-
-    ; add 8 to be between 8 and 232
-    CLC
-    ADC #$08
-
-    ; truncate the result to multiples of 8
-    LSR
-    LSR
-    LSR
-    ASL
-    ASL
-    ASL
-
     RTS
 .endproc
 
 
-; generates a random number between 8 and 208
+; generates a random number between 0 and 3
 ; to be used for a random y-coordinate
-.proc random_y
-loop_random_y:
+.proc random_high
+loop_random_hi:
     JSR galois16
-    CMP #$c8  ; we will add 8
-    BPL loop_random_y
-
-    ; add 8 to be between 8 and 208
-    CLC
-    ADC #$08
-
-    ; truncate the result to multiples of 8
-    LSR
-    LSR
-    LSR
-    ASL
-    ASL
-    ASL
+    AND #$03
 
     RTS
 .endproc
+
+.segment "ZEROPAGE"
+.importzp seed
