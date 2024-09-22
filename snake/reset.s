@@ -24,14 +24,13 @@ clear_oam:
     INX
     BNE clear_oam
 
-    ; initialize zero-page values
-    LDA #$21
-    STA apple_high
+    ; initialize seed for random values
+    LDA #$01
     STA seed
     LDA #$b7
-    STA apple_low
     STA seed+1
 
+    ; initial snake position
     LDA #$20
     STA HEAD_HIGH
     STA BODY_START+1
@@ -43,13 +42,22 @@ clear_oam:
     LDA #$f0
     STA BODY_START+2
 
+    ; intial snake attributes
     LDA #LEFT
     STA snake_dir
     LDA #$04 ; 2 segments = 4 memory addresses
     STA snake_length
 
+    ; reset score
+    LDA #0
+    STA score
+    STA score+1
+    STA score+2
+    LDA #1
+    STA update_score
+
     JMP main
 .endproc
 
 .segment "ZEROPAGE"
-.importzp apple_low, apple_high, snake_dir, snake_length, seed
+.importzp snake_dir, snake_length, seed, score, update_score
