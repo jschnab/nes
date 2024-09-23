@@ -22,6 +22,9 @@
     LDA #$02
     STA OAMDMA
 
+    JSR draw_apple
+    JSR draw_snake
+
     LDA #1
     BIT update_score
     BEQ @skip_update_score
@@ -732,8 +735,6 @@ mainloop:
     JSR read_controller1
     JSR update_direction
     JSR update_game_state
-    JSR draw_apple
-    JSR draw_snake
 
     INC sleeping
 sleep:
