@@ -150,16 +150,14 @@ try10:
 .endproc
 
 .proc draw_snake
-    ; draw head
-    LDA PPUSTATUS
-    LDA HEAD_HIGH
-    STA PPUADDR
-    LDA HEAD_LOW
-    STA PPUADDR
-    LDA #SNAKE_BODY_TILE
-    STA PPUDATA
+    ; if there's a collision, do not re-draw the snake
+    ; because we check collision after updating the snake position
+    LDA #1
+    BIT collision
+    BNE @done
 
     ; erase tail
+    ; important to do it first to avoid creating a hole in the snake
     LDA PPUSTATUS
     LDX snake_length
     LDA HEAD_HIGH,X
@@ -169,6 +167,48 @@ try10:
     LDA #BACKGROUND_TILE
     STA PPUDATA
 
+    ; draw body
+    ; important to do to avoid drawing the body with head tiles
+    LDA PPUSTATUS
+    LDA BODY_START+1
+    STA PPUADDR
+    LDA BODY_START
+    STA PPUADDR
+    LDA #SNAKE_BODY_TILE
+    STA PPUDATA
+
+    ; draw head
+    LDA PPUSTATUS
+    LDA HEAD_HIGH
+    STA PPUADDR
+    LDA HEAD_LOW
+    STA PPUADDR
+
+    ; select appropriate head tile for snake direction
+    LDA snake_dir
+    LSR
+    BCS @up
+    LSR
+    BCS @down
+    LSR
+    BCS @left
+    LSR
+    BCS @right
+@up:
+    LDA #HEAD_UP_TILE
+    JMP @store_head
+@down:
+    LDA #HEAD_DOWN_TILE
+    JMP @store_head
+@left:
+    LDA #HEAD_LEFT_TILE
+    JMP @store_head
+@right:
+    LDA #HEAD_RIGHT_TILE
+@store_head:
+    STA PPUDATA
+
+@done:
     LDA #$00
     STA PPUSCROLL
     STA PPUSCROLL
@@ -246,6 +286,7 @@ do_update:
     STA timer
 
     JSR update_snake_position
+    JSR check_body_collision
     JSR check_apple_collision
 
 done_updating_state:
@@ -316,7 +357,7 @@ done_updating_direction:
     TYA
     PHA
 
-    ; shift x and y coordinates down the snake
+    ; shift coordinates down the snake
     LDX snake_length
     DEX
 update_snake_position_loop:
@@ -389,6 +430,8 @@ right:
     JMP done_updating_snake_position
 
 wall_collision:
+    LDA #1
+    STA collision
     JMP gameover
 
 done_updating_snake_position:
@@ -401,6 +444,27 @@ done_updating_snake_position:
     RTS
 .endproc
 
+.proc check_body_collision
+    LDX #2  ; start on first body segment
+@loop:
+    LDA HEAD_LOW,X
+    CMP HEAD_LOW
+    BNE @continue
+    LDA HEAD_HIGH,X
+    CMP HEAD_HIGH
+    BEQ @body_collision
+@continue:
+    INX
+    INX
+    CPX snake_length
+    BNE @loop
+    RTS
+@body_collision:
+    LDA #1
+    STA collision
+    JMP gameover
+.endproc
+
 .proc check_apple_collision
     LDA apple_low
     CMP HEAD_LOW
@@ -410,9 +474,15 @@ done_updating_snake_position:
     BNE done_check_apple_collision
     LDA #2
     JSR add_score
-    INC snake_length
-    INC snake_length
     JSR spawn_apple
+    LDA snake_length
+    CMP #$fe
+    BPL grow_snake
+    JMP done_check_apple_collision
+
+grow_snake:
+    INC snake_length
+    INC snake_length
 
 done_check_apple_collision:
     RTS
@@ -729,6 +799,8 @@ vblankwait: ; wait for vblank before continuing
     LDA #%00011110 ; turn on screen
     STA PPUMASK
 
+    LDA #0
+    STA collision
     JSR spawn_apple
 
 mainloop:
@@ -862,6 +934,7 @@ seed: .res 2
 score: .res 3
 update_score: .res 1
 temp: .res 6
+collision: .res 1
 .exportzp apple_low, apple_high, snake_dir, snake_length, pad1, seed, score, update_score
 
 .segment "VECTORS"
