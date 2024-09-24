@@ -35,7 +35,6 @@
     STA update_score
 
 @skip_update_score:
-
     LDA #0
     STA sleeping
 
@@ -154,9 +153,11 @@ try10:
     ; because we check collision after updating the snake position
     LDA #1
     BIT collision
-    BNE @done
+    BEQ @continue
+    JMP @done
 
-    ; erase tail
+@continue:
+    ; erase old tail
     ; important to do it first to avoid creating a hole in the snake
     LDA PPUSTATUS
     LDX snake_length
@@ -169,6 +170,7 @@ try10:
 
     ; draw body
     ; important to do to avoid drawing the body with head tiles
+    ; do first to avoid overwriting the tail with a body tile
     LDA PPUSTATUS
     LDA BODY_START+1
     STA PPUADDR
@@ -177,13 +179,66 @@ try10:
     LDA #SNAKE_BODY_TILE
     STA PPUDATA
 
+    ; draw new tail
+    LDA PPUSTATUS
+    LDX snake_length
+    ; HEAD + snake_length points after snake
+    ; so decrement to get last segment
+    DEX
+    DEX
+    LDA HEAD_HIGH,X
+    STA PPUADDR
+    LDA HEAD_LOW,X
+    STA PPUADDR
+    ; select appropriate tail tile for snake direction
+    ; compare the tail segment with the preceding segment
+    LDY snake_length
+    DEY
+    DEY
+    DEY
+    DEY
+    LDA HEAD_HIGH,X
+    CMP HEAD_HIGH,Y
+    BEQ @tail_compare_low_byte
+    BPL @tail_down
+    ; tail is pointing up
+    JMP @tail_up
+@tail_compare_low_byte:
+    LDA HEAD_LOW,X
+    CMP HEAD_LOW,Y
+    BPL @tail_down_or_right
+    ; tail is pointing up or left
+    LDA HEAD_LOW,Y
+    SEC
+    SBC HEAD_LOW,X
+    CMP #1
+    BEQ @tail_left
+@tail_up:
+    LDA #TAIL_UP_TILE
+    JMP @store_tail
+@tail_left:
+    LDA #TAIL_LEFT_TILE
+    JMP @store_tail
+@tail_down_or_right:
+    SEC
+    SBC HEAD_LOW,Y
+    CMP #1
+    BEQ @tail_right
+    JMP @tail_down
+@tail_right:
+    LDA #TAIL_RIGHT_TILE
+    JMP @store_tail
+@tail_down:
+    LDA #TAIL_DOWN_TILE
+@store_tail:
+    STA PPUDATA
+
     ; draw head
     LDA PPUSTATUS
     LDA HEAD_HIGH
     STA PPUADDR
     LDA HEAD_LOW
     STA PPUADDR
-
     ; select appropriate head tile for snake direction
     LDA snake_dir
     LSR

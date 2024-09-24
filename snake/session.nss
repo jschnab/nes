@@ -8,7 +8,7 @@ BtnChrBank2=0
 BtnGridAll=1
 BtnGridTile=0
 BtnGridAtr=0
-BtnGridBlock=1
+BtnGridBlock=0
 BtnGridScr=0
 BtnPal=1
 BtnTypeIn=0
@@ -31,7 +31,7 @@ MenuSaveRLE=0
 VarTileViewTagBuf=0
 VarBgPalCur=0
 VarPalActive=0
-VarTileActive=255
+VarTileActive=17
 VarBankActive=0
 VarPPUMask=0
 VarPPUMaskSet0=0
@@ -53,10 +53,10 @@ VarNameSelectionT=-1
 VarNameSelectionB=30
 VarNameCopyW=-1
 VarNameCopyH=-1
-VarCHRSelectionL=15
-VarCHRSelectionR=16
-VarCHRSelectionT=15
-VarCHRSelectionB=16
+VarCHRSelectionL=1
+VarCHRSelectionR=2
+VarCHRSelectionT=1
+VarCHRSelectionB=2
 VarCHRCopyW=1
 VarCHRCopyH=1
 VarCHRCopyRect=1
@@ -67,13 +67,13 @@ VarCheckpoint_CHRBanks=4
 VarCheckpoint_CHRBanksUndo=4
 
 
-VarCHRSelected=00[ff]01
+VarCHRSelected=00[11]0100[ee]
 
 
 Palette=2a1906162a0f10202a0f10202a0919290f1121310f1222320f1323330f1424340f1525350f1626360f1727370f1828380f1929390f1a2a3a0f1b2b3b0f1c2c3c
 
 
-PalUndo=29190616290f1020290f1020290919290f1121310f1222320f1323330f1424340f1525350f1626360f1727370f1828380f1929390f1a2a3a0f1b2b3b0f1c2c3c
+PalUndo=2a1906162a0f10202a0f10202a0919290f1121310f1222320f1323330f1424340f1525350f1626360f1727370f1828380f1929390f1a2a3a0f1b2b3b0f1c2c3c
 
 
 CHRMain=00[10]ff[8]00[10]ff[18]00[c3]0448282a00[e]082a00[ea]182442241800[2]ff[8]00[8]80e0f8fefff8e08000[8]01071fff7f1f070100[8]ff7e[2]3c[2]18[2]1000[8]0818[2]3c[2]7e[2]ff001000[2]807c80007fff[2]4fc37fff7f000800[2]013e0100feff[2]f2c3fefffe00[3]4200[4]3c7e[2]ff[5]00[4]4200[3]ff[5]7e[2]3c00[70]0636777f[3]3e1c103a7f[4]3e1c00[f0]ff[8]386cc6[2]fec6[2]00ff[8]fcc6[2]fcc6[2]fc00ff[8]7cc6c0[3]c67c00ff[8]f8c4c6[3]c4f800ff[8]fec0[2]fcc0[2]fe00ff[8]fec0[2]fcc0[3]00ff[8]7cc2c0[2]cec67c00ff[8]c6[3]fec6[3]00ff[8]7e18[5]7e00ff[8]06[4]c6[2]7c00ff[8]c6[2]ccfcd8ccc600ff[8]c0[6]fe00ff[8]c6eefed6[2]c6[2]00ff[8]c6e6f6decec6[2]00ff[8]7cc6[5]7c00ff[8]fcc6[3]fcc0[2]00ff[8]7cc6[3]d6cc7c06ff[8]fcc6[3]fcccc600ff[8]78ccc07c06c67c00ff[8]7e18[6]00ff[8]c6[6]7c00ff[8]c6[5]6c3800ff[8]c6[3]d6[2]fe6c00ff[8]c6[2]281028c6[2]00ff[8]66[4]3c18[2]00ff[8]fe060c183060fe00[61]ff[8]7cc6ceeee6c67c00ff[8]060e3e06[4]00ff[8]3c66[2]0c18307e00ff[8]3c66061c06663c00ff[8]60[2]6ccc[2]7e0c00ff[8]7e60[2]7c06[2]7c00ff[8]0c18307c66[2]3c00ff[8]7e06[2]0c18306000ff[8]3c62723c4e463c00ff[8]3c66[2]3e060c3800[1961]
@@ -94,13 +94,13 @@ NameCopy=00[3c0]
 NameUndo=01[21]52424e51440160[3]6960[3]01[12]00[3]1000[19]1100[30]1100[17]1100[11]1000[85]1000[4]1100[9]1000[36]3000[2]2520[2]00[c]1100[12]2000[1f]20[3]2100[19]1000[b]1100[f]1100[9]1100[4d]1100[17]1000[37]1100[18]1000[31]1100[5]1000[54]1000[33]1000[18]1100[22]
 
 
-AttrTable=090a[7]00[b]88aa[4]00[3]88aa[4]a0[3]aa[15]0a[8]
+AttrTable=090a[7]00[b]88aa[3]a200[3]882aa2aa[2]a0[3]a82aaa2aaa2aaaa2aa[2]8a2aaa[5]8aaa[3]0a080a[5]08
 
 
 AttrCopy=00[40]
 
 
-AttrUndo=090a[7]00[b]88aa[4]00[3]88aa[4]a0[3]aa[15]0a[8]
+AttrUndo=090a[7]00[b]88aa[3]a200[3]882aa2aa[2]a0[3]aa2aaa2aaa2aaaa2aa[2]8a2aaa[5]8aaa[3]0a080a[5]08
 
 
 MetaSprites=ff[10000]
