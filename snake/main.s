@@ -322,20 +322,13 @@ try10:
 .endproc
 
 .proc update_game_state
-    PHP
-    PHA
-    TXA
-    PHA
-    TYA
-    PHA
-
     ; update snake only if timer is zero
     LDA timer
-    BEQ do_update
+    BEQ @do_update
     DEC timer
-    JMP done_updating_state
+    JMP @done
 
-do_update:
+@do_update:
     ; reset timer
     LDA #TIMER_DURATION  ; this value controls game speed
     STA timer
@@ -344,13 +337,7 @@ do_update:
     JSR check_body_collision
     JSR check_apple_collision
 
-done_updating_state:
-    PLA
-    TAY
-    PLA
-    TAX
-    PLA
-    PLP
+@done:
     RTS
 .endproc
 
@@ -405,13 +392,6 @@ done_updating_direction:
 .endproc
 
 .proc update_snake_position
-    PHP
-    PHA
-    TXA
-    PHA
-    TYA
-    PHA
-
     ; shift coordinates down the snake
     LDX snake_length
     DEX
@@ -490,12 +470,6 @@ wall_collision:
     JMP gameover
 
 done_updating_snake_position:
-    PLA
-    TAY
-    PLA
-    TAX
-    PLA
-    PLP
     RTS
 .endproc
 
@@ -872,77 +846,19 @@ sleep:
 .endproc
 
 .proc gameover
-    ; G
     LDA PPUSTATUS
     LDA #$21
     STA PPUADDR
     LDA #$cb
     STA PPUADDR
-    LDA #$46
-    STA PPUDATA
 
-    ; A
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cc
-    STA PPUADDR
-    LDA #$40
+    LDX #0
+@loop:
+    LDA gameover_txt,X
     STA PPUDATA
-
-    ; M
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cd
-    STA PPUADDR
-    LDA #$4c
-    STA PPUDATA
-
-    ; E
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$ce
-    STA PPUADDR
-    LDA #$44
-    STA PPUDATA
-
-    ; O
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d1
-    STA PPUADDR
-    LDA #$4e
-    STA PPUDATA
-
-    ; V
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d2
-    STA PPUADDR
-    LDA #$55
-    STA PPUDATA
-
-    ; E
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d3
-    STA PPUADDR
-    LDA #$44
-    STA PPUDATA
-
-    ; R
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d4
-    STA PPUADDR
-    LDA #$51
-    STA PPUDATA
+    INX
+    CMP #0
+    BNE @loop
 
     ; use black palette for text
     LDX #$da
@@ -976,6 +892,9 @@ palettes:
 .byte $2a, $06, $16, $26  ; reds
 .byte $2a, $09, $19, $29  ; greens
 .byte $2a, $01, $21, $31  ; blues
+
+gameover_txt:
+.byte $46, $40, $4c, $44, $01, $4e, $55, $44, $51, 0
 
 .segment "ZEROPAGE"
 apple_low: .res 1
