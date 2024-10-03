@@ -11,3 +11,12 @@
     STA PPUADDR
     STA PPUADDR
 .endmacro
+
+.macro assign_16i dest, value
+; 'dest' is location in zeropage memory where to write 16-bit address
+; 'value' is 16-bit address
+    lda #<value
+    sta dest+0
+    lda #>value
+    sta dest+1
+.endmacro

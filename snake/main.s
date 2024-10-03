@@ -2,53 +2,131 @@
 .include "header.inc"
 .include "macros.s"
 
-.segment "CODE"
-.proc irq_handler
-    RTI
-.endproc
-
 .import read_controller1
 
+.segment "CODE"
+.proc wait_frame
+; wait for next NMI to finish
+    inc nmi_ready
+@loop:
+    lda nmi_ready
+    bne @loop
+    rts
+.endproc
+
+.proc ppu_update
+; wait until next NMI finishes and turn rendering on
+    lda ppuctrl
+    ora #%10000000
+    sta ppuctrl
+    sta PPUCTRL
+    lda ppumask
+    ora #%00011110
+    sta ppumask
+    sta PPUMASK
+    jsr wait_frame
+    rts
+.endproc
+
+.proc ppu_off
+; wait until screen is rendered then turn rendering off
+; now it's safe to write to PPU
+    jsr wait_frame
+    lda ppuctrl
+    and #%01111111
+    sta ppuctrl
+    sta PPUCTRL
+    lda ppumask
+    and #%11100001
+    sta ppumask
+    sta PPUMASK
+    rts
+.endproc
+
+.proc write_text
+; writes zero-terminated string to screen
+; assumes that text address is stored in paddr
+; and that the PPU address was initialized
+    ldy #0
+@loop:
+    lda (paddr), Y
+    beq @end
+    sta PPUDATA
+    iny
+    jmp @loop
+@end:
+    rts
+.endproc
+
+.proc irq_handler
+    rti
+.endproc
+
+
 .proc nmi_handler
-    PHP
-    PHA
-    TXA
-    PHA
-    TYA
-    PHA
+    php
+    pha
+    txa
+    pha
+    tya
+    pha
 
-    LDA #$00
-    STA OAMADDR
-    LDA #$02
-    STA OAMDMA
+    ; transfer OAM using DMA
+    lda #$00
+    sta OAMADDR
+    lda #$02
+    sta OAMDMA
 
-    JSR draw_apple
-    JSR draw_snake
+    ; write palette
+    vram_set_address $3F00
+    ldx #0
+@loop:
+    lda palettes, x
+    sta PPUDATA
+    inx
+    cpx #32
+    bcc @loop
 
-    LDA #1
-    BIT update_score
-    BEQ @skip_update_score
-    JSR display_score
+    ; write scroll and PPU control settings
+    lda #0
+    sta PPUSCROLL
+    sta PPUSCROLL
+    lda ppuctrl
+    sta PPUCTRL
+    lda ppumask
+    sta PPUMASK
+
+    lda #GAME_SCREEN
+    bit active_screen
+    beq @skip_draw_snake_apple
+    jsr draw_apple
+    jsr draw_snake
+
+@skip_draw_snake_apple:
+    lda #1
+    bit update_score
+    beq @skip_update_score
+    jsr display_score
     ; reset update_score flag
-    LDA #%11111110
-    AND update_score
-    STA update_score
+    lda #%11111110
+    and update_score
+    sta update_score
 
 @skip_update_score:
-    LDA #0
-    STA sleeping
+    lda #0
+    sta sleeping
 
-    LDA #$00
-    STA $2005
-    STA $2005
+    ; flag PPU update as completed
+    ldx #0
+    stx nmi_ready
 
-    PLA
-    TAY
-    PLA
-    TAX
-    PLA
-    PLP
-    RTI
+    pla
+    tay
+    pla
+    tax
+    pla
+    plp
+    rti
 .endproc
 
 .proc add_score
@@ -118,7 +196,6 @@ try10:
 .endproc
 
 .proc display_score
-    vram_set_address (NAME_TABLE_ADDR + $27)
     LDA score+2
     JSR dec99_to_bytes
     STX temp
@@ -132,6 +209,7 @@ try10:
     STX temp+4
     STA temp+5
 
+    vram_set_address (NAME_TABLE_ADDR + $27)
     LDX #0
 @loop:
     LDA temp,x
@@ -306,17 +384,17 @@ try10:
 
 .proc draw_apple
     ; write apple data
-    LDA PPUSTATUS
-    LDA apple_high
-    STA PPUADDR
-    LDA apple_low
-    STA PPUADDR
-    LDA #APPLE_TILE
-    STA PPUDATA
+    lda PPUSTATUS
+    lda apple_high
+    sta PPUADDR
+    lda apple_low
+    sta PPUADDR
+    lda #APPLE_TILE
+    sta PPUDATA
 
-    LDA #$00
-    STA PPUSCROLL
-    STA PPUSCROLL
+    lda #$00
+    sta PPUSCROLL
+    sta PPUSCROLL
 
     RTS
 .endproc
@@ -517,285 +595,100 @@ done_check_apple_collision:
     RTS
 .endproc
 
-.proc start_screen
-    ; P
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cb
-    STA PPUADDR
-    LDA #$13
-    STA PPUDATA
+.proc draw_welcome_screen
+; wait for player to press start button
+    jsr ppu_off
 
-    ; R
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cc
-    STA PPUADDR
-    LDA #$15
-    STA PPUDATA
+    ; clear screen tiles
+    vram_set_address $2000
+    lda #$01  ; tile
+    ldx #30  ; rows
+@loop_clear_tiles_rows:
+    ldy #32  ; columns
+@loop_clear_tiles_cols:
+    sta PPUDATA
+    dey
+    bne @loop_clear_tiles_cols
+    dex
+    bne @loop_clear_tiles_rows
 
-    ; E
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cd
-    STA PPUADDR
-    LDA #$08
-    STA PPUDATA
+    ; clear screen attributes
+    vram_set_address $23C0
+    lda #%01010101  ; palettes
+    ldx #0
+@loop_clear_attr:
+    sta PPUDATA
+    inx
+    cpx #64
+    bne @loop_clear_attr
 
-    ; S
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$ce
-    STA PPUADDR
-    LDA #$16
-    STA PPUDATA
+    ; print title
+    vram_set_address $20EB
+    assign_16i paddr, title_txt
+    jsr write_text
 
-    ; S
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cf
-    STA PPUADDR
-    LDA #$16
-    STA PPUDATA
+    ; print 'press start'
+    vram_set_address $22EA
+    assign_16i paddr, press_start_txt
+    jsr write_text
 
-    ; S
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d1
-    STA PPUADDR
-    LDA #$16
-    STA PPUDATA
-
-    ; T
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d2
-    STA PPUADDR
-    LDA #$17
-    STA PPUDATA
-
-    ; A
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d3
-    STA PPUADDR
-    LDA #$04
-    STA PPUDATA
-
-    ; R
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d4
-    STA PPUADDR
-    LDA #$15
-    STA PPUDATA
-
-    ; T
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d5
-    STA PPUADDR
-    LDA #$17
-    STA PPUDATA
-
-start_screen_loop:
-    INC seed
-    JSR read_controller1 
-    LDA #BTN_STA
-    BIT pad1
-    BEQ start_screen_loop
-
-    ; erase start message
-    LDX #$ff
-
-    ; P
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cb
-    STA PPUADDR
-    STX PPUDATA
-
-    ; R
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cc
-    STA PPUADDR
-    STX PPUDATA
-
-    ; E
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cd
-    STA PPUADDR
-    STX PPUDATA
-
-    ; S
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$ce
-    STA PPUADDR
-    STX PPUDATA
-
-    ; S
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cf
-    STA PPUADDR
-    STX PPUDATA
-
-    ; S
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d1
-    STA PPUADDR
-    STX PPUDATA
-
-    ; T
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d2
-    STA PPUADDR
-    STX PPUDATA
-
-    ; A
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d3
-    STA PPUADDR
-    STX PPUDATA
-
-    ; R
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d4
-    STA PPUADDR
-    STX PPUDATA
-
-    ; T
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$d5
-    STA PPUADDR
-    STX PPUDATA
-
-    RTS
+    jsr ppu_update
+    rts
 .endproc
 
-.proc init_game
+.proc draw_game_screen
+    jsr ppu_off
+
     ; draw header background tiles
-    LDX #$00
-    LDY #$20
-loop_header_1:
-    LDA PPUSTATUS
-    STY PPUADDR
-    STX PPUADDR
-    LDA #$01
-    STA PPUDATA
-    INX
-    CPX #$40
-    BNE loop_header_1
+    vram_set_address $2000
+    lda #$01 ; tile
+    ldx #0
+@loop_header_tiles:
+    sta PPUDATA
+    inx
+    cpx #$40
+    bne @loop_header_tiles
 
-    ; draw 'score' word
-    ; S
-    LDY #$20
-    LDA PPUSTATUS
-    STY PPUADDR
-    LDA #$21
-    STA PPUADDR
-    LDA #$52
-    STA PPUDATA
-
-    ; C
-    LDA #$42
-    STA PPUDATA
-
-    ; O
-    LDA #$4e
-    STA PPUDATA
-
-    ; R
-    LDA #$51
-    STA PPUDATA
-
-    ; E
-    LDA #$44
-    STA PPUDATA
+    ; draw 'score' word + initial score
+    vram_set_address $2021
+    assign_16i paddr, score_txt
+    jsr write_text
 
     ; set header attribute table
-    LDX #$c0
-    LDY #$23
-loop_header_2:
-    LDA PPUSTATUS
-    STY PPUADDR
-    STX PPUADDR
-    LDA #%00000101
-    STA PPUDATA
-    INX
-    CPX #$c8
-    BNE loop_header_2
+    vram_set_address $23C0
+    lda #%00000101
+    ldx #0
+@loop_header_attr:
+    sta PPUDATA
+    inx
+    cpx #8
+    bne @loop_header_attr
 
     ; draw grass tiles
-    LDX #$40
-    LDY #$20
-loop_grass_1:
-    LDA PPUSTATUS
-    STY PPUADDR
-    STX PPUADDR
-    LDA #$00
-    STA PPUDATA
-    INX
-    BNE loop_grass_1
+    vram_set_address $2040
+    lda #0  ; tile
+    ldx #28  ; rows
+@loop_grass_tiles_rows:
+    ldy #32  ; columns
+@loop_grass_tiles_cols:
+    sta PPUDATA
+    dey
+    bne @loop_grass_tiles_cols
+    dex
+    bne @loop_grass_tiles_rows
 
     ; draw grass attribute table
-    LDX #$c8
-    LDY #$23
-loop_grass_2:
-    LDA PPUSTATUS
-    STY PPUADDR
-    STX PPUADDR
-    LDA #$00
-    STA PPUDATA
-    INX
-    BNE loop_grass_2
-   
-    ; draw snake initial position
-    LDX #$03
-    ; head
-    LDA PPUSTATUS
-    LDA HEAD_HIGH
-    STA PPUADDR
-    LDA HEAD_LOW
-    STA PPUADDR
-    STX PPUDATA
-    ; body
-    LDA PPUSTATUS
-    LDA BODY_START+1
-    STA PPUADDR
-    LDA BODY_START
-    STA PPUADDR
-    STX PPUDATA
+    vram_set_address $23C8
+    lda #0  ; palette
+    ldx #0
+@loop_grass_attr:
+    sta PPUDATA
+    inx
+    cpx #56  ; number of attribute addresses in screen minus in header
+    bne @loop_grass_attr
 
-    RTS
+    jsr ppu_update
+    rts
 .endproc
 
 .import random_low
@@ -804,61 +697,83 @@ loop_grass_2:
 
 .export main
 .proc main
+    lda #%10001000 ; turn on NMIs, sprites use first pattern table
+    sta ppuctrl
+    sta PPUCTRL
+    lda #%00011110 ; turn on screen
+    sta ppumask
+    sta PPUMASK
 
-    ; write a palette
-    LDX PPUSTATUS
-    LDX #$3f
-    STX PPUADDR
-    LDX #$00
-    STX PPUADDR
-load_palettes:
-    LDA palettes,X
-    STA PPUDATA
-    INX
-    CPX #$20
-    BNE load_palettes
+    lda #WELCOME_SCREEN
+    sta active_screen
+    jsr draw_welcome_screen
+@welcomeloop:
+    jsr read_controller1
+    lda #BTN_STA
+    bit pad1
+    beq @welcomeloop
 
-    JSR init_game
+    lda #GAME_SCREEN
+    sta active_screen
+    jsr draw_game_screen
 
-vblankwait: ; wait for vblank before continuing
-    BIT PPUSTATUS
-    BPL vblankwait
-    LDA #%10001000 ; turn on NMIs, sprites use first pattern table
-    STA PPUCTRL
-    LDA #%00011110 ; turn on screen
-    STA PPUMASK
+    lda #0
+    sta collision
+    jsr spawn_apple
 
-    LDA #0
-    STA collision
-    JSR spawn_apple
+@gameloop:
+    jsr read_controller1
+    jsr update_direction
+    jsr update_game_state
 
-mainloop:
-    JSR read_controller1
-    JSR update_direction
-    JSR update_game_state
+    inc sleeping
+@sleep:
+    lda sleeping
+    bne @sleep
 
-    INC sleeping
-sleep:
-    LDA sleeping
-    BNE sleep
-
-    JMP mainloop
+    jmp @gameloop
 .endproc
 
 .proc gameover
-    LDA PPUSTATUS
-    LDA #$21
-    STA PPUADDR
-    LDA #$cb
-    STA PPUADDR
+    JSR ppu_off
 
-    LDX #0
-@loop:
-    LDA gameover_txt,X
-    STA PPUDATA
-    INX
-    CMP #0
-    BNE @loop
+    ; we are changing the palette for just the part of the screen where
+    ; 'gameover' is written, so reset tiles in this area to avoid game screen
+    ; looking weird
+    ldx #$01 ; tile number
+    vram_set_address $2188
+    ldy #0
+@loop_tiles1:
+    stx PPUDATA
+    iny
+    cpy #$10
+    bne @loop_tiles1
+    vram_set_address $21A8
+    ldy #0
+@loop_tiles2:
+    stx PPUDATA
+    iny
+    cpy #$10
+    bne @loop_tiles2
+    vram_set_address $21C8
+    ldy #0
+@loop_tiles3:
+    stx PPUDATA
+    iny
+    cpy #$10
+    bne @loop_tiles3
+    vram_set_address $21E8
+    ldy #0
+@loop_tiles4:
+    stx PPUDATA
+    iny
+    cpy #$10
+    bne @loop_tiles4
+
+    ; write gameover text
+    vram_set_address $21CB
+    assign_16i paddr, gameover_txt
+    jsr write_text
 
     ; use black palette for text
     LDX #$da
@@ -873,28 +788,35 @@ loop_attributes:
     CPX #$de
     BNE loop_attributes
 
-    LDA #$00
-    STA PPUSCROLL
-    STA PPUSCROLL
+    jsr ppu_update
 
 gameover_loop:
-    JMP gameover_loop
+    jmp gameover_loop
 .endproc
 
 .segment "RODATA"
 palettes:
-.byte $2a, $19, $06, $16  ; light green, dark green, brown, red
-.byte $2a, $0f, $10, $20  ; greys
-.byte $2a, $09, $19, $29  ; greens
-.byte $2a, $01, $21, $31  ; blues
+.byte $2A, $19, $06, $16  ; light green, dark green, brown, red
+.byte $2A, $0f, $10, $20  ; greys
+.byte $2A, $09, $19, $29  ; greens
+.byte $2A, $01, $21, $31  ; blues
 
-.byte $2a, $00, $10, $30  ; greys
-.byte $2a, $06, $16, $26  ; reds
-.byte $2a, $09, $19, $29  ; greens
-.byte $2a, $01, $21, $31  ; blues
+.byte $2A, $00, $10, $30  ; greys
+.byte $2A, $06, $16, $26  ; reds
+.byte $2A, $09, $19, $29  ; greens
+.byte $2A, $01, $21, $31  ; blues
 
 gameover_txt:
-.byte $46, $40, $4c, $44, $01, $4e, $55, $44, $51, 0
+.byte $46, $40, $4C, $44, $01, $01, $4E, $55, $44, $51, 0
+
+score_txt:
+.byte $52, $42, $4E, $51, $44, $01, $60, $60, $60, $60, $60, $60, $60, 0
+
+title_txt:
+.byte $42, $01, $4E, $01, $41, $01, $51, $01, $40, 0
+
+press_start_txt:
+.byte $4F, $51, $44, $52, $52, $01, $01, $52, $53, $40, $51, $53, 0
 
 .segment "ZEROPAGE"
 apple_low: .res 1
@@ -909,6 +831,11 @@ score: .res 3
 update_score: .res 1
 temp: .res 6
 collision: .res 1
+ppuctrl: .res 1
+ppumask: .res 1
+nmi_ready: .res 1
+paddr: .res 2
+active_screen: .res 1
 .exportzp apple_low, apple_high, snake_dir, snake_length, pad1, seed, score, update_score
 
 .segment "VECTORS"
