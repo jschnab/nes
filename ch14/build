@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+ca65 reset.s
+ca65 hello.s
+
+ld65 reset.o hello.o -C ../nes.cfg -o hello.nes
